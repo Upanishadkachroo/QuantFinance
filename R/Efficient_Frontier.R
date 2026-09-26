@@ -5,18 +5,22 @@ library("httr")
 library("jsonlite")
 library("keyring")
 library("dplyr")
-library("ggplot")
+library("ggplot2")
 library("plotly")
+library("purrr")
+library("rlang")
 
 #get and format price history data
 tickers = c("META", "COIN", "AMZN", "NVDA")
+
+keyring::key_set("STOCK_DATA_KEY")
 
 for(i in 1:length(tickers)){
   #print(i)
   requrl <- paste0("https://api.stockdata.org/v1/data/eod?symbols=",
                    tickers[i],
                    "&sort=asc&api_token=",
-                   keyring::key_set("STOCK_DATA_KEY")
+                   keyring::key_get("STOCK_DATA_KEY")
   )
   pricehistoryres <- GET(requrl)
   
@@ -55,13 +59,13 @@ modifiedsharperatios <- expectedreturns/standarddeviations
 
 
 #calculate x on variance-covariance matrix
-xdf <- alldata[-1, -(1:(length(tikcers)+1))]
+xdf <- alldata[-1, -(1:(length(tickers)+1))]
 
 colnames(xdf) <- tickers
 
 for(e in tickers){
-  xdf <- sdf %>%
-    mutate(!!e :=get(e) - expectedreturns[1,e])
+  xdf <- xdf %>%
+    mutate(!!e := get(e) - expectedreturns[1,e])
 }
 
 xmatrix <- data.matrix(xdf)
@@ -82,9 +86,9 @@ equalportfolio$expectedreturn <- sum(weights*expectedreturns)
 
 equalportfolio$volatility <- sqrt((weights %*% varcovar) %*% t(weights))
 
-equalportfolio$sharperatio <- equalportfolio$expectedreturn / equalportfolio$volatilty 
-  
-  
+equalportfolio$sharperatio <- equalportfolio$expectedreturn / equalportfolio$volatility
+
+
 #simulate multiple portfolio weights
 numofportfolios <- 5000
 
@@ -96,7 +100,7 @@ for(e in tickers){
     mutate(!!e := runif(numofportfolios))
 }
 
-multipleweight$totalofrandoms <- rowsums(multipleweight)
+multipleweight$totalofrandoms <- rowSums(multipleweight)
 
 weightcolnames <- c()
 
@@ -120,7 +124,7 @@ for(i in 1:nrow(multipleweight)){
   multipleweight[i,("volatility")] <- sqrt((weights %*% varcovar) %*% t(weights))
 }
 
-multipleweight$sharperatio <- multipleweight$expectedreturn / multipleweight$volatility
+multipleweight$sharperatio <- multipleweight$expectedReturn / multipleweight$volatility
 
 multipleweight[, c(weightcolnames, "expectedReturn", "volatility")] <- round(multipleweight[, c(weightcolnames, "expectedReturn", "volatility")] * 100, 4)
 
@@ -135,7 +139,7 @@ generalplot <- function(data,knownaes) {
 }
 
 graph <- ggplot(multipleweight, aes(x=volatility, y=expectedReturn)) +
-  geom_point(aes(color=sharpeRatio))+
+  geom_point(aes(color=sharperatio))+
   generalplot(multipleweight, weightcolnames)+
   scale_colour_gradient(low = "red", high = "blue") +
   theme_classic()+
@@ -155,26 +159,4 @@ graph <- ggplot(multipleweight, aes(x=volatility, y=expectedReturn)) +
 ggplotly(graph)
 
 
-# End Of Efficient Frontier 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+# End Of Efficient Frontier
