@@ -11,7 +11,7 @@ library("purrr")
 library("rlang")
 
 #get and format price history data
-tickers = c("META", "COIN", "AMZN", "NVDA")
+tickers = c("META", "COIN", "AMZN", "NVDA") #define a vector containing four stocks
 
 keyring::key_set("STOCK_DATA_KEY")
 
@@ -34,20 +34,20 @@ for(i in 1:length(tickers)){
   }
 }
 
-colnames(alldata) <- c("Date", tickers)
+colnames(alldata) <- c("Date", tickers) #Renames the dataframe columns to Date, META, COIN, AMZN, and NVDA
 
 
 #get daily returns and summary data
 expectedreturns=NULL
 standarddeviations=NULL
 for(e in tickers){
-  newcolumnname=paste0(e, "return")
+  newcolumnname=paste0(e, "return")#add new column to the alldata table of return
   
   alldata <- alldata %>%
-    mutate(!!newcolumnname := (get(e) - lag(get(e))) / lag(get(e)) )
+    mutate(!!newcolumnname := (get(e) - lag(get(e))) / lag(get(e)) ) #Rt = (Pt - Pt-1)/Pt-1
   
-  expectedreturns <- cbind(expectedreturns, mean(alldata[-1, newcolumnname]))
-  standarddeviations <- cbind(standarddeviations, sd(alldata[-1, newcolumnname]))
+  expectedreturns <- cbind(expectedreturns, mean(alldata[-1, newcolumnname]))#computes mean in separate expectedreturns table
+  standarddeviations <- cbind(standarddeviations, sd(alldata[-1, newcolumnname]))#computes sd in separate standarddevaitions table
 }
 
 colnames(expectedreturns) <- tickers
