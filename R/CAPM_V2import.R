@@ -1,56 +1,58 @@
-```r
 # =====================================================
 # CAPM AND FAMA-FRENCH 3-FACTOR REGRESSION
 # Stock: Apple (AAPL)
 # Frequency: Monthly
 # =====================================================
 
-# STEP 1: Install and load packages
-# Run install.packages() only once on your computer.
 
-install.packages("quantmod")
+# -----------------------------------------------------
+# STEP 1: Load package
+# -----------------------------------------------------
 
 library(quantmod)
 
-# STEP 2: Download monthly stock prices from Yahoo Finance
 
-prices <- getSymbols(
+# -----------------------------------------------------
+# STEP 2: Download AAPL data
+# -----------------------------------------------------
+
+AAPL <- getSymbols(
   "AAPL",
   src = "yahoo",
   from = "2015-01-01",
-  periodicity = "monthly",
+  to = "2026-01-01",
   auto.assign = FALSE
 )
 
-# Extract adjusted closing prices
-monthly_prices <- Ad(prices)
+
+# Look at AAPL data
+head(AAPL)
+
+
+# -----------------------------------------------------
+# STEP 3: Calculate monthly AAPL returns
+# -----------------------------------------------------
+
+AAPL_returns <- monthlyReturn(AAPL)
+
+head(AAPL_returns)
+
+
+# -----------------------------------------------------
+# STEP 4: Convert AAPL returns into a normal dataframe
+# -----------------------------------------------------
 
 stock_data <- data.frame(
-  date = as.Date(index(monthly_prices)),
-  adjusted_price = as.numeric(monthly_prices)
+  date = index(AAPL_returns),
+  stock_return = as.numeric(AAPL_returns)
 )
 
-# Convert dates to the first day of each month
-stock_data$date <- as.Date(
-  format(stock_data$date, "%Y-%m-01")
-)
+head(stock_data)
 
-# STEP 3: Calculate monthly stock returns
-# Return = (Current price / Previous price) - 1
 
-n <- nrow(stock_data)
-
-stock_data$stock_return <- c(
-  NA,
-  stock_data$adjusted_price[2:n] /
-    stock_data$adjusted_price[1:(n-1)] - 1
-)
-
-stock_data <- stock_data[
-  !is.na(stock_data$stock_return),
-]
-
-# STEP 4: Download Fama-French monthly factor data
+# -----------------------------------------------------
+# STEP 5: Download Fama-French 3-factor data
+# -----------------------------------------------------
 
 ff_url <- paste0(
   "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/",
@@ -65,8 +67,15 @@ download.file(
   mode = "wb"
 )
 
-# Find the CSV file inside the ZIP archive
-zip_files <- unzip(ff_zip, list = TRUE)$Name
+
+# -----------------------------------------------------
+# STEP 6: Read Fama-French data
+# -----------------------------------------------------
+
+zip_files <- unzip(
+  ff_zip,
+  list = TRUE
+)$Name
 
 csv_file <- zip_files[
   grepl("\\.csv$", zip_files, ignore.case = TRUE)
@@ -77,12 +86,12 @@ ff_lines <- readLines(
   warn = FALSE
 )
 
-# Keep only monthly observations in YYYYMM format.
-# This excludes explanatory text and annual summaries.
 
+# Keep only monthly observations
 monthly_lines <- ff_lines[
   grepl("^\\s*[0-9]{6},", ff_lines)
 ]
+
 
 ff_data <- read.csv(
   text = paste(
@@ -92,49 +101,78 @@ ff_data <- read.csv(
   strip.white = TRUE
 )
 
-# STEP 5: Clean factor data
 
-ff_data$Date <- trimws(as.character(ff_data$Date))
+# -----------------------------------------------------
+# STEP 7: Clean Fama-French dates
+# -----------------------------------------------------
+
+ff_data$Date <- trimws(
+  as.character(ff_data$Date)
+)
 
 ff_data$date <- as.Date(
   paste0(
-    substr(ff_data$Date, 1, 4), "-",
-    substr(ff_data$Date, 5, 6), "-01"
+    substr(ff_data$Date, 1, 4),
+    "-",
+    substr(ff_data$Date, 5, 6),
+    "-01"
   )
 )
 
-# Fama-French factors are in percentage points.
-# Convert them to decimals to match stock returns.
+
+# -----------------------------------------------------
+# STEP 8: Convert percentages to decimals
+# -----------------------------------------------------
 
 ff_data$Mkt.RF <- ff_data$Mkt.RF / 100
-ff_data$SMB    <- ff_data$SMB / 100
-ff_data$HML    <- ff_data$HML / 100
-ff_data$RF     <- ff_data$RF / 100
+ff_data$SMB <- ff_data$SMB / 100
+ff_data$HML <- ff_data$HML / 100
+ff_data$RF <- ff_data$RF / 100
+
 
 ff_data <- ff_data[
-  , c("date", "Mkt.RF", "SMB", "HML", "RF")
+  ,
+  c("date", "Mkt.RF", "SMB", "HML", "RF")
 ]
 
-# STEP 6: Merge stock returns and factor data by month
+
+# Look at Fama-French data
+head(ff_data)
+
+
+# -----------------------------------------------------
+# STEP 9: Merge AAPL and Fama-French data
+# -----------------------------------------------------
 
 data <- merge(
-  stock_data[, c("date", "stock_return")],
+  stock_data,
   ff_data,
   by = "date"
 )
 
-# Calculate excess stock returns
-data$stock_excess <- data$stock_return - data$RF
 
-# Remove incomplete observations
+# -----------------------------------------------------
+# STEP 10: Calculate AAPL excess return
+# -----------------------------------------------------
+
+data$stock_excess <- (
+  data$stock_return - data$RF
+)
+
+
+# Remove missing values
 data <- na.omit(data)
 
-# Inspect the final dataset
-head(data)
-str(data)
-summary(data)
 
-# STEP 7: Run CAPM regression
+# Look at final dataset
+head(data)
+
+str(data)
+
+
+# -----------------------------------------------------
+# STEP 11: CAPM REGRESSION
+# -----------------------------------------------------
 
 capm <- lm(
   stock_excess ~ Mkt.RF,
@@ -143,7 +181,10 @@ capm <- lm(
 
 summary(capm)
 
-# STEP 8: Run Fama-French 3-factor regression
+
+# -----------------------------------------------------
+# STEP 12: FAMA-FRENCH 3-FACTOR REGRESSION
+# -----------------------------------------------------
 
 ff3 <- lm(
   stock_excess ~ Mkt.RF + SMB + HML,
@@ -152,32 +193,61 @@ ff3 <- lm(
 
 summary(ff3)
 
-# STEP 9: Compare the models
 
-cat("CAPM R-squared:", summary(capm)$r.squared, "\n")
-cat("FF3 R-squared:", summary(ff3)$r.squared, "\n")
+# -----------------------------------------------------
+# STEP 13: Compare R-squared
+# -----------------------------------------------------
+
+cat(
+  "CAPM R-squared:",
+  summary(capm)$r.squared,
+  "\n"
+)
+
+cat(
+  "FF3 R-squared:",
+  summary(ff3)$r.squared,
+  "\n"
+)
+
+
+# Adjusted R-squared
 
 cat(
   "CAPM Adjusted R-squared:",
-  summary(capm)$adj.r.squared, "\n"
+  summary(capm)$adj.r.squared,
+  "\n"
 )
 
 cat(
   "FF3 Adjusted R-squared:",
-  summary(ff3)$adj.r.squared, "\n"
+  summary(ff3)$adj.r.squared,
+  "\n"
 )
 
-# Compare estimated coefficients
+
+# -----------------------------------------------------
+# STEP 14: View coefficients
+# -----------------------------------------------------
+
 coef(capm)
+
 coef(ff3)
 
-# Compare the nested models
+
+# -----------------------------------------------------
+# STEP 15: Compare models
+# -----------------------------------------------------
+
 anova(capm, ff3)
 
-# STEP 10: Save the merged dataset for future use
+
+# -----------------------------------------------------
+# STEP 16: Save final dataset
+# -----------------------------------------------------
+
 write.csv(
   data,
   "AAPL_CAPM_FF3_data.csv",
   row.names = FALSE
 )
-```
